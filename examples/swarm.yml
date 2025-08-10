@@ -1,0 +1,98 @@
+version: 2
+swarm:
+  name: SwarmCore Development
+  leader: lead_developer # The leader is the agent that is the primary agent for the swarm. It will receive the input from the user.
+  before_start: # These are commands that run before the swarm is started
+    - echo "Hello, world!"
+    - echo "Goodbye, world!"
+  
+  # The agents that make up the swarm. Each report is a separate instance of that agent.
+  # If 2 agents have the same report, each report will be a unique instance of that agent.
+  # The system will use internal IDs to track the instances of the agents.
+  agents: 
+    lead_developer: # The name of the agent. This is used to reference the agent in the swarm.yml file.
+      description: Lead developer responsible for developing and maintaining the swarm-core gem
+      provider: anthropic
+      model: opus
+      # The path the agent will be confined to. When a relative path is provided, it is relative to
+      # the current working directory or to the path provided as the root path to the API.
+      # This path should be a default matcher for all tools that support matchers for file paths.
+      # After processing the matchers for tools, this is the ultimate matcher that should decline any operations outside
+      # of this path for the tools Read, Write, Edit, Multiedit, Glob, LS, Grep - except bash.
+      path: .
+      allowed_tools:
+        # For the tools that support matchers, no matchers means any path, command, url, etc.
+        # Alternatively, you can use the tool name directly and it will match any path, command, url, etc. Example:
+        # - Bash
+        # - Write
+        # - Edit
+        # - WebFetch
+
+        # The tools enabled by default with no matchers are Read, Glob, LS, Grep, TodoWrite, Task - they don't need to be present in allowed_tools.
+        - tool: Bash # Executes shell commands in your environment
+          matcher: /REGEX_FOR_BASH_COMMAND/
+        - tool: Read # Reads the contents of files
+          matcher: /REGEX_FOR_FILE_PATH/
+        - tool: Write # Creates or overwrites files	
+          matcher: /REGEX_FOR_FILE_PATH/
+        - tool: Edit # Makes targeted edits to specific files
+          matcher: /REGEX_FOR_FILE_PATH/
+        - tool: MultiEdit # Performs multiple edits on a single file atomically
+          matcher: /REGEX_FOR_FILE_PATH/
+        - Glob # Finds files based on pattern matching
+        - LS # Lists files and directories
+        - Grep # Searches for patterns in file contents
+        - TodoWrite # Creates and manages structured task lists
+        - Task # Runs a sub-agent to handle complex, multi-step tasks
+        - tool: WebFetch # Fetches content from a url
+          matcher: /REGEX_FOR_URL/
+      system_prompt: |
+        A System Prompt for the lead developer.
+      reports:
+        - ruby_llm_expert
+      hooks:
+        post_tool_use: # runs after a tool is used
+          - matcher: [SOME MATCHER] [no matcher means all tools]
+            command: echo "Tool finished: $tool"
+        pre_tool_use: # runs before a tool is used
+          - matcher: [SOME MATCHER] [no matcher means all tools]
+            command: echo "Tool called: $tool"
+        stop: # runs when the agent is done responding
+          - [bash command]
+          - [another bash command]
+        input: # runs when the agent receives an input
+          - matcher: [SOME MATCHER] [no matcher means all tools]
+            command: echo "Input received: $input"
+        pre_compact: # runs before the agent context is compacted
+          - [bash command]
+      mcp_servers:
+        http_transport_mcp_server:
+          type: http
+          url: http://localhost:3000/mcp
+          headers:
+            Authorization: Bearer ${GITHUB_TOKEN:-dummy_token}       
+        stdio_mcp_server:
+          type: stdio
+          command: bundle
+          args:
+            - exec
+            - mcpserver
+          env:
+            VARIABLE: ${VALUE:-default_value}
+        sse_mcp_server:
+          type: sse
+          url: http://localhost:3001
+          headers:
+            SomeHeader: Header Value
+          
+    ruby_llm_expert:
+      description: Expert in RubyLLM gem for unified AI model interactions and multi-provider support
+      provider: openai
+      model: o3
+      path: ~/src/github.com/crmne/ruby_llm
+      allowed_tools:
+        - Read
+      disallowed_tools: # Disallowed tools follow the same pattern matching rules as the allowed tools, but they take precendence.
+        - Task
+      system_prompt: |
+        System prompt for the ruby_llm_expert.

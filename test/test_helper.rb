@@ -8,6 +8,7 @@ SimpleCov.start do
   add_filter "/version.rb"
   add_group "Library", "lib"
   track_files "{lib}/**/*.rb"
+  enable_coverage :branch
 end
 
 $LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
@@ -15,6 +16,7 @@ $LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
 require "swarm_core"
 require "minitest/autorun"
 require "mocha/minitest"
+require "active_support/testing/declarative"
 
 # Set up a temporary home directory for all tests
 require "tmpdir"

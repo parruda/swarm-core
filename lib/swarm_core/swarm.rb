@@ -12,10 +12,15 @@ module SwarmCore
       :leader_instance,
       :errors
 
-    def initialize(yaml_content)
+    attr_accessor :system_utils, :yaml_parser, :agent_factory
+
+    def initialize(yaml_content, system_utils: nil, yaml_parser: nil, agent_factory: nil)
       @errors = []
       @agent_definitions = {}
       @active_agents = {}
+      @system_utils = system_utils || SystemUtils
+      @yaml_parser = yaml_parser || YAML.method(:safe_load)
+      @agent_factory = agent_factory || Agent
       parse_yaml(yaml_content)
       validate
     end
@@ -40,7 +45,7 @@ module SwarmCore
       return unless definition
 
       parent ||= @leader_instance
-      agent = Agent.new(definition, parent: parent)
+      agent = create_agent(definition, parent: parent)
       @active_agents[agent.id] = agent
       agent
     end
@@ -62,7 +67,7 @@ module SwarmCore
     private
 
     def parse_yaml(yaml_content)
-      config = YAML.safe_load(yaml_content)
+      config = @yaml_parser.call(yaml_content)
 
       unless config.is_a?(Hash)
         @errors << "Invalid YAML structure: must be a Hash"
@@ -153,7 +158,7 @@ module SwarmCore
 
     def run_before_start_commands
       @before_start.each do |command|
-        system(command) or raise "Command failed: #{command}"
+        @system_utils.execute_command(command) or raise "Command failed: #{command}"
       end
     end
 
@@ -161,7 +166,7 @@ module SwarmCore
       return unless @leader_name
 
       leader_definition = @agent_definitions[@leader_name]
-      @leader_instance = Agent.new(leader_definition)
+      @leader_instance = create_agent(leader_definition)
       @active_agents[@leader_instance.id] = @leader_instance
 
       # Initialize report agents
@@ -179,6 +184,10 @@ module SwarmCore
         # Recursively initialize reports
         initialize_reports(child)
       end
+    end
+
+    def create_agent(definition, parent: nil)
+      @agent_factory.new(definition, parent: parent)
     end
 
     def build_tree_structure(agent)

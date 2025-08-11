@@ -4,7 +4,9 @@ require "test_helper"
 
 module SwarmCore
   class AgentDefinitionTest < Minitest::Test
-    def test_valid_agent_definition
+    extend ActiveSupport::Testing::Declarative
+
+    test "valid agent definition" do
       config = {
         "description" => "Test agent",
         "provider" => "anthropic",
@@ -23,7 +25,7 @@ module SwarmCore
       assert_equal("claude-3", definition.model)
     end
 
-    def test_missing_required_fields
+    test "missing required fields" do
       config = {
         "path" => "./test",
       }
@@ -36,7 +38,7 @@ module SwarmCore
       assert_includes(definition.errors, "Agent 'test_agent': model is required")
     end
 
-    def test_invalid_provider
+    test "invalid provider" do
       config = {
         "description" => "Test agent",
         "provider" => "invalid_provider",
@@ -49,7 +51,7 @@ module SwarmCore
       assert_includes(definition.errors, "Agent 'test_agent': Invalid provider 'invalid_provider'. Must be one of: anthropic, openai, google")
     end
 
-    def test_tool_configuration_parsing
+    test "tool configuration parsing" do
       config = {
         "description" => "Test agent",
         "provider" => "anthropic",
@@ -72,7 +74,7 @@ module SwarmCore
       assert_equal("/.*\\.rb$/", definition.allowed_tools[1][:matcher])
     end
 
-    def test_can_use_tool_with_default_tools
+    test "can use tool with default tools" do
       config = {
         "description" => "Test agent",
         "provider" => "anthropic",
@@ -94,7 +96,7 @@ module SwarmCore
       refute(definition.can_use_tool?("Write"))
     end
 
-    def test_can_use_tool_with_allowed_and_disallowed
+    test "can use tool with allowed and disallowed" do
       config = {
         "description" => "Test agent",
         "provider" => "anthropic",
@@ -116,7 +118,7 @@ module SwarmCore
       assert(definition.can_use_tool?("Read"))
     end
 
-    def test_mcp_server_validation
+    test "mcp server validation" do
       config = {
         "description" => "Test agent",
         "provider" => "anthropic",
@@ -136,7 +138,7 @@ module SwarmCore
       assert_includes(definition.errors, "Agent 'test_agent': MCP server 'invalid_server' must have a type")
     end
 
-    def test_hooks_parsing
+    test "hooks parsing" do
       config = {
         "description" => "Test agent",
         "provider" => "anthropic",
@@ -157,7 +159,7 @@ module SwarmCore
       assert_includes(definition.hooks.keys, "stop")
     end
 
-    def test_reports_parsing
+    test "reports parsing" do
       config = {
         "description" => "Test agent",
         "provider" => "anthropic",
@@ -171,7 +173,7 @@ module SwarmCore
       assert_equal(["agent1", "agent2"], definition.reports)
     end
 
-    def test_default_path
+    test "default path" do
       config = {
         "description" => "Test agent",
         "provider" => "anthropic",
@@ -181,6 +183,56 @@ module SwarmCore
       definition = AgentDefinition.new("test_agent", config)
 
       assert_equal(".", definition.path)
+    end
+
+    test "invalid tool type in configuration" do
+      config = {
+        "description" => "Test agent",
+        "provider" => "anthropic",
+        "model" => "claude-3",
+        "allowed_tools" => [
+          "ValidTool",
+          123, # Invalid - not a String or Hash
+          { "tool" => "Another" },
+        ],
+      }
+
+      definition = AgentDefinition.new("test_agent", config)
+
+      refute_predicate(definition, :valid?)
+      assert(definition.errors.any? { |e| e.include?("Invalid tool configuration: 123") })
+      # Should still parse valid tools
+      assert_equal(2, definition.allowed_tools.length)
+    end
+
+    test "empty path validation" do
+      config = {
+        "description" => "Test agent",
+        "provider" => "anthropic",
+        "model" => "claude-3",
+        "path" => "",
+      }
+
+      definition = AgentDefinition.new("test_agent", config)
+
+      # Empty path should be treated as default
+      assert_predicate(definition, :valid?)
+      assert_equal("", definition.path)
+    end
+
+    test "nil provider validation skip" do
+      config = {
+        "description" => "Test agent",
+        "provider" => nil,
+        "model" => "claude-3",
+      }
+
+      definition = AgentDefinition.new("test_agent", config)
+
+      refute_predicate(definition, :valid?)
+      # Should only have "provider is required" error, not "invalid provider"
+      assert_equal(1, definition.errors.select { |e| e.include?("provider") }.length)
+      assert(definition.errors.any? { |e| e.include?("provider is required") })
     end
   end
 end

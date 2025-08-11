@@ -4,6 +4,8 @@ require "test_helper"
 
 module SwarmCore
   class SwarmTest < Minitest::Test
+    extend ActiveSupport::Testing::Declarative
+
     def setup
       @valid_yaml = <<~YAML
         version: 2
@@ -32,7 +34,7 @@ module SwarmCore
       YAML
     end
 
-    def test_valid_swarm_initialization
+    test "valid swarm initialization" do
       swarm = Swarm.new(@valid_yaml)
 
       assert_predicate(swarm, :valid?)
@@ -44,7 +46,7 @@ module SwarmCore
       assert_equal(3, swarm.agent_definitions.length)
     end
 
-    def test_invalid_yaml_syntax
+    test "invalid yaml syntax" do
       invalid_yaml = "invalid: yaml: content:"
       swarm = Swarm.new(invalid_yaml)
 
@@ -52,7 +54,7 @@ module SwarmCore
       assert(swarm.errors.any? { |e| e.include?("YAML syntax error") })
     end
 
-    def test_missing_version
+    test "missing version" do
       yaml = <<~YAML
         swarm:
           name: Test Swarm
@@ -69,7 +71,7 @@ module SwarmCore
       assert_includes(swarm.errors, "version is required")
     end
 
-    def test_invalid_version
+    test "invalid version" do
       yaml = @valid_yaml.sub("version: 2", "version: 1")
       swarm = Swarm.new(yaml)
 
@@ -77,7 +79,7 @@ module SwarmCore
       assert_includes(swarm.errors, "Only version 2 is supported, got: 1")
     end
 
-    def test_missing_swarm_name
+    test "missing swarm name" do
       yaml = @valid_yaml.sub("name: Test Swarm", "")
       swarm = Swarm.new(yaml)
 
@@ -85,7 +87,7 @@ module SwarmCore
       assert_includes(swarm.errors, "swarm.name is required")
     end
 
-    def test_undefined_leader
+    test "undefined leader" do
       yaml = @valid_yaml.sub("leader: lead_agent", "leader: non_existent")
       swarm = Swarm.new(yaml)
 
@@ -93,7 +95,7 @@ module SwarmCore
       assert_includes(swarm.errors, "Leader 'non_existent' is not defined in agents")
     end
 
-    def test_undefined_report_agent
+    test "undefined report agent" do
       yaml = @valid_yaml.sub("grandchild_agent", "non_existent_agent")
       swarm = Swarm.new(yaml)
 
@@ -101,7 +103,7 @@ module SwarmCore
       assert(swarm.errors.any? { |e| e.include?("reports to undefined agent 'non_existent_agent'") })
     end
 
-    def test_circular_dependency_detection
+    test "circular dependency detection" do
       yaml = <<~YAML
         version: 2
         swarm:
@@ -127,7 +129,7 @@ module SwarmCore
       assert(swarm.errors.any? { |e| e.include?("Circular dependency detected") })
     end
 
-    def test_agent_definition_errors_propagation
+    test "agent definition errors propagation" do
       yaml = <<~YAML
         version: 2
         swarm:
@@ -145,11 +147,11 @@ module SwarmCore
       assert(swarm.errors.any? { |e| e.include?("Invalid provider") })
     end
 
-    def test_start_with_valid_swarm
-      swarm = Swarm.new(@valid_yaml)
+    test "start with valid swarm" do
+      # Stub SystemUtils for testing
+      SystemUtils.stub(:execute_command, true) do
+        swarm = Swarm.new(@valid_yaml)
 
-      # Mock system call for before_start commands
-      swarm.stub(:system, true) do
         assert(swarm.start)
         assert(swarm.leader_instance)
         assert_equal("lead_agent", swarm.leader_instance.name)
@@ -157,7 +159,7 @@ module SwarmCore
       end
     end
 
-    def test_start_with_invalid_swarm
+    test "start with invalid swarm" do
       yaml = @valid_yaml.sub("version: 2", "version: 1")
       swarm = Swarm.new(yaml)
 
@@ -166,20 +168,19 @@ module SwarmCore
       assert_empty(swarm.active_agents)
     end
 
-    def test_start_with_failed_before_start_command
-      swarm = Swarm.new(@valid_yaml)
+    test "start with failed before start command" do
+      # Stub SystemUtils to simulate command failure
+      SystemUtils.stub(:execute_command, false) do
+        swarm = Swarm.new(@valid_yaml)
 
-      # Mock system call to simulate failure
-      swarm.stub(:system, false) do
         refute(swarm.start)
         assert(swarm.errors.any? { |e| e.include?("Failed to start swarm") })
       end
     end
 
-    def test_spawn_agent
-      swarm = Swarm.new(@valid_yaml)
-
-      swarm.stub(:system, true) do
+    test "spawn agent" do
+      SystemUtils.stub(:execute_command, true) do
+        swarm = Swarm.new(@valid_yaml)
         swarm.start
 
         # Spawn a new instance of child_agent
@@ -192,10 +193,9 @@ module SwarmCore
       end
     end
 
-    def test_spawn_undefined_agent
-      swarm = Swarm.new(@valid_yaml)
-
-      swarm.stub(:system, true) do
+    test "spawn undefined agent" do
+      SystemUtils.stub(:execute_command, true) do
+        swarm = Swarm.new(@valid_yaml)
         swarm.start
 
         agent = swarm.spawn_agent("non_existent")
@@ -204,10 +204,9 @@ module SwarmCore
       end
     end
 
-    def test_find_agent
-      swarm = Swarm.new(@valid_yaml)
-
-      swarm.stub(:system, true) do
+    test "find agent" do
+      SystemUtils.stub(:execute_command, true) do
+        swarm = Swarm.new(@valid_yaml)
         swarm.start
 
         leader = swarm.leader_instance
@@ -226,10 +225,9 @@ module SwarmCore
       end
     end
 
-    def test_agent_tree
-      swarm = Swarm.new(@valid_yaml)
-
-      swarm.stub(:system, true) do
+    test "agent tree" do
+      SystemUtils.stub(:execute_command, true) do
+        swarm = Swarm.new(@valid_yaml)
         swarm.start
 
         tree = swarm.agent_tree
@@ -251,7 +249,7 @@ module SwarmCore
       end
     end
 
-    def test_agent_tree_without_leader
+    test "agent tree without leader" do
       yaml = <<~YAML
         version: 2
         swarm:
@@ -268,7 +266,99 @@ module SwarmCore
       assert_nil(swarm.agent_tree)
     end
 
-    def test_multiple_reports_initialization
+    test "circular dependency with non-existent agent in chain" do
+      yaml = <<~YAML
+        version: 2
+        swarm:
+          name: Test Swarm
+          agents:
+            agent_a:
+              description: Agent A
+              provider: anthropic
+              model: claude
+              reports:
+                - non_existent
+      YAML
+
+      swarm = Swarm.new(yaml)
+
+      refute_predicate(swarm, :valid?)
+      # Should have error about undefined agent
+      assert(swarm.errors.any? { |e| e.include?("reports to undefined agent 'non_existent'") })
+    end
+
+    test "parse yaml with non-hash structure" do
+      yaml = "just a string"
+      swarm = Swarm.new(yaml)
+
+      refute_predicate(swarm, :valid?)
+      assert_includes(swarm.errors, "Invalid YAML structure: must be a Hash")
+    end
+
+    test "spawn agent returns nil for undefined agent" do
+      SystemUtils.stub(:execute_command, true) do
+        swarm = Swarm.new(@valid_yaml)
+        swarm.start
+        result = swarm.spawn_agent("undefined_agent")
+
+        assert_nil(result)
+      end
+    end
+
+    test "validate leader with nil leader name" do
+      yaml = <<~YAML
+        version: 2
+        swarm:
+          name: Test Swarm
+          agents:
+            test_agent:
+              description: Test
+              provider: anthropic
+              model: claude
+      YAML
+
+      swarm = Swarm.new(yaml)
+
+      # Should be valid with no leader
+      assert_predicate(swarm, :valid?)
+    end
+
+    test "initialize leader with no leader name" do
+      yaml = <<~YAML
+        version: 2
+        swarm:
+          name: Test Swarm
+          agents:
+            test_agent:
+              description: Test
+              provider: anthropic
+              model: claude
+      YAML
+
+      SystemUtils.stub(:execute_command, true) do
+        swarm = Swarm.new(yaml)
+
+        assert(swarm.start)
+        assert_nil(swarm.leader_instance)
+        assert_empty(swarm.active_agents)
+      end
+    end
+
+    test "validate path with nil path" do
+      config = {
+        "description" => "Test agent",
+        "provider" => "anthropic",
+        "model" => "claude-3",
+        "path" => nil,
+      }
+
+      definition = AgentDefinition.new("test_agent", config)
+
+      assert_predicate(definition, :valid?)
+      assert_equal(".", definition.path) # Should default to "."
+    end
+
+    test "multiple reports initialization" do
       yaml = <<~YAML
         version: 2
         swarm:
@@ -292,9 +382,8 @@ module SwarmCore
               model: gemini
       YAML
 
-      swarm = Swarm.new(yaml)
-
-      swarm.stub(:system, true) do
+      SystemUtils.stub(:execute_command, true) do
+        swarm = Swarm.new(yaml)
         swarm.start
 
         assert_equal(3, swarm.active_agents.length)
@@ -305,6 +394,71 @@ module SwarmCore
         assert_includes(child_names, "child1")
         assert_includes(child_names, "child2")
       end
+    end
+
+    test "initialize reports with missing report definition" do
+      # This tests the branch where report_definition is nil in initialize_reports
+      yaml = <<~YAML
+        version: 2
+        swarm:
+          name: Test Swarm
+          leader: lead_agent
+          agents:
+            lead_agent:
+              description: Lead agent
+              provider: anthropic
+              model: claude
+      YAML
+
+      SystemUtils.stub(:execute_command, true) do
+        swarm = Swarm.new(yaml)
+
+        # Manually add a report that doesn't have a definition
+        swarm.agent_definitions["lead_agent"].instance_variable_set(:@reports, ["non_existent"])
+
+        assert(swarm.start)
+        # Should still start successfully, just skip the missing report
+        assert(swarm.leader_instance)
+        assert_empty(swarm.leader_instance.children)
+      end
+    end
+    test "stubbing SystemUtils for testing" do
+      # Demonstrate how to stub SystemUtils for testing
+      commands_executed = []
+
+      SystemUtils.stub(:execute_command, ->(cmd) {
+        commands_executed << cmd
+        true
+      }) do
+        swarm = Swarm.new(@valid_yaml)
+        swarm.start
+
+        # Verify SystemUtils was called with expected commands
+        assert_equal(["echo \"Starting swarm\""], commands_executed)
+        assert(swarm.leader_instance)
+      end
+    end
+
+    test "SystemUtils can be injected as a mock" do
+      # Create a mock SystemUtils for complete control
+      mock_system_utils = Class.new do
+        @commands = []
+
+        class << self
+          attr_reader :commands
+
+          def execute_command(cmd) # rubocop:disable Naming/PredicateMethod
+            @commands << cmd
+            cmd != "fail" # Fail if command is "fail"
+          end
+        end
+      end
+
+      swarm = Swarm.new(@valid_yaml, system_utils: mock_system_utils)
+      swarm.start
+
+      # Verify our mock was used
+      assert_equal(["echo \"Starting swarm\""], mock_system_utils.commands)
     end
   end
 end

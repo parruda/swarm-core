@@ -5,12 +5,15 @@ require "securerandom"
 module SwarmCore
   class Agent
     attr_reader :id, :definition, :parent, :session_id, :context, :children
+    attr_accessor :id_generator, :time_provider
 
-    def initialize(definition, parent: nil, session_id: nil)
-      @id = SecureRandom.uuid
+    def initialize(definition, parent: nil, session_id: nil, id_generator: nil, time_provider: nil)
+      @id_generator = id_generator || SecureRandom.method(:uuid)
+      @time_provider = time_provider || Time.method(:now)
+      @id = @id_generator.call
       @definition = definition
       @parent = parent
-      @session_id = session_id || parent&.session_id || SecureRandom.uuid
+      @session_id = session_id || parent&.session_id || @id_generator.call
       @context = {}
       @children = []
       @conversation_history = []
@@ -21,13 +24,23 @@ module SwarmCore
     end
 
     def spawn_report(agent_definition)
-      child = Agent.new(agent_definition, parent: self, session_id: session_id)
+      child = self.class.new(
+        agent_definition,
+        parent: self,
+        session_id: session_id,
+        id_generator: id_generator,
+        time_provider: time_provider,
+      )
       @children << child
       child
     end
 
     def add_message(role, content)
-      @conversation_history << { role: role, content: content, timestamp: Time.now }
+      @conversation_history << {
+        role: role,
+        content: content,
+        timestamp: @time_provider.call,
+      }
     end
 
     def conversation_history

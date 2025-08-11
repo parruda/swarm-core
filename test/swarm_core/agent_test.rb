@@ -4,6 +4,8 @@ require "test_helper"
 
 module SwarmCore
   class AgentTest < Minitest::Test
+    extend ActiveSupport::Testing::Declarative
+
     def setup
       @definition = AgentDefinition.new("test_agent", {
         "description" => "Test agent",
@@ -19,7 +21,7 @@ module SwarmCore
       })
     end
 
-    def test_agent_initialization
+    test "agent initialization" do
       agent = Agent.new(@definition)
 
       assert_match(/^[a-f0-9-]+$/, agent.id)
@@ -30,7 +32,7 @@ module SwarmCore
       assert_empty(agent.children)
     end
 
-    def test_agent_with_parent
+    test "agent with parent" do
       parent = Agent.new(@definition)
       child = Agent.new(@child_definition, parent: parent)
 
@@ -38,20 +40,20 @@ module SwarmCore
       assert_equal(parent.session_id, child.session_id)
     end
 
-    def test_agent_with_custom_session_id
+    test "agent with custom session id" do
       session_id = "custom-session-123"
       agent = Agent.new(@definition, session_id: session_id)
 
       assert_equal(session_id, agent.session_id)
     end
 
-    def test_name_delegation
+    test "name delegation" do
       agent = Agent.new(@definition)
 
       assert_equal("test_agent", agent.name)
     end
 
-    def test_spawn_report
+    test "spawn report" do
       parent = Agent.new(@definition)
       child = parent.spawn_report(@child_definition)
 
@@ -60,7 +62,7 @@ module SwarmCore
       assert_includes(parent.children, child)
     end
 
-    def test_conversation_history
+    test "conversation history" do
       agent = Agent.new(@definition)
 
       agent.add_message("user", "Hello")
@@ -80,7 +82,7 @@ module SwarmCore
       assert_equal(2, agent.conversation_history.length)
     end
 
-    def test_can_use_tool_delegation
+    test "can use tool delegation" do
       agent = Agent.new(@definition)
 
       # Delegates to definition
@@ -88,7 +90,7 @@ module SwarmCore
       refute(agent.can_use_tool?("Bash"))
     end
 
-    def test_leader_check
+    test "leader check" do
       parent = Agent.new(@definition)
       child = Agent.new(@child_definition, parent: parent)
 
@@ -96,7 +98,7 @@ module SwarmCore
       refute_predicate(child, :leader?)
     end
 
-    def test_depth_calculation
+    test "depth calculation" do
       parent = Agent.new(@definition)
       child = parent.spawn_report(@child_definition)
       grandchild = child.spawn_report(@definition)
@@ -106,7 +108,7 @@ module SwarmCore
       assert_equal(2, grandchild.depth)
     end
 
-    def test_ancestors
+    test "ancestors" do
       parent = Agent.new(@definition)
       child = parent.spawn_report(@child_definition)
       grandchild = child.spawn_report(@definition)
@@ -116,7 +118,7 @@ module SwarmCore
       assert_equal([child, parent], grandchild.ancestors)
     end
 
-    def test_descendants
+    test "descendants" do
       parent = Agent.new(@definition)
       child1 = parent.spawn_report(@child_definition)
       child2 = parent.spawn_report(@child_definition)
@@ -130,7 +132,7 @@ module SwarmCore
       assert_includes(descendants, grandchild)
     end
 
-    def test_find_agent
+    test "find agent" do
       parent = Agent.new(@definition)
       child1 = parent.spawn_report(@child_definition)
       child2 = parent.spawn_report(@child_definition)
@@ -143,7 +145,7 @@ module SwarmCore
       assert_nil(parent.find_agent("non-existent-id"))
     end
 
-    def test_to_h
+    test "to_h" do
       parent = Agent.new(@definition)
       child = parent.spawn_report(@child_definition)
 
@@ -163,6 +165,35 @@ module SwarmCore
       assert_equal(1, child_hash[:depth])
       assert_equal(parent.id, child_hash[:parent_id])
       assert_empty(child_hash[:children_ids])
+    end
+    test "dependency injection for predictable IDs and timestamps" do
+      # Use fixed IDs for predictable testing
+      id_counter = 0
+      id_generator = -> { "test-id-#{id_counter += 1}" }
+
+      # Use fixed time for predictable testing
+      fixed_time = Time.new(2024, 1, 1, 12, 0, 0)
+      time_provider = -> { fixed_time }
+
+      agent = Agent.new(
+        @definition,
+        id_generator: id_generator,
+        time_provider: time_provider,
+      )
+
+      assert_equal("test-id-1", agent.id)
+      assert_equal("test-id-2", agent.session_id)
+
+      agent.add_message("user", "Hello")
+      history = agent.conversation_history
+
+      assert_equal(fixed_time, history[0][:timestamp])
+
+      # Child inherits the providers
+      child = agent.spawn_report(@child_definition)
+
+      assert_equal("test-id-3", child.id)
+      assert_equal("test-id-2", child.session_id) # Inherits parent's session
     end
   end
 end

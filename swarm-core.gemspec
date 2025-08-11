@@ -43,6 +43,7 @@ Gem::Specification.new do |spec|
   # guide at: https://bundler.io/guides/creating_gem.html
 
   spec.add_dependency("dry-cli", "~> 1.3")
+  spec.add_dependency("ruby_llm", "~> 1.6.0")
   spec.add_dependency("ruby-mcp-client", "~> 0.7")
   spec.add_dependency("zeitwerk", "~> 2.6")
 end

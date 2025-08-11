@@ -10,3 +10,6 @@ AllCops:
   NewCops: enable
   Exclude:
     - '.ruby-lsp/**/*'
+
+Minitest/MultipleAssertions:
+  Enabled: false

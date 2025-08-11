@@ -50,12 +50,15 @@ The project uses Zeitwerk for automatic code loading with custom inflections:
 - Test files are in the `test/` directory
 - Includes Mocha for mocking, but only use it when strictly necessary
 - SimpleCov for code coverage
-- WebMock for HTTP request stubbing
+- WebMock / VCR for HTTP request stubbing
+- Use Factory Bot and Faker instead of fixtures
 
 ### Testing Guidelines
 - Write tests for behaviour rather then being coupled with the implementation
 - Only use mocks/stubs when strictly necessary - Over mocking/stubbing is bad
 - Ensure the tests actually provide value - do NOT mock everything and test the mocks.
+- Use VCR / Webmock for tests that involve API requests
+- Always use Factories, NOT Fixtures.
 
 ### Important Conventions
 - Ruby version requirement: >= 3.2.0

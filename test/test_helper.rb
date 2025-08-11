@@ -12,8 +12,9 @@ end
 
 $LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
 
-require "swarm-core"
+require "swarm_core"
 require "minitest/autorun"
+require "mocha/minitest"
 
 # Set up a temporary home directory for all tests
 require "tmpdir"
